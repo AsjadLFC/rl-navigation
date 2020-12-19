@@ -7,13 +7,14 @@ import tensorflow.keras as keras
 
 from tensorflow.keras.optimizers import Adam
 from gym import spaces
+
 from rl_nav_noise import noiseOU
 from rl_nav_buffer import ReplayBuffer
 from rl_nav_networks import CriticNetwork, ActorNetwork
 
 REPLAY_BUFFER_SIZE = 100000
 REPLAY_START_SIZE = 10000
-BATCH_SIZE = 200
+BATCH_SIZE = 128
 GAMMA = 0.99
 
 class DDPG:
@@ -23,10 +24,15 @@ class DDPG:
 		self.state_dim = state_dim
 		self.action_dim = action_dim
 		self.environment = env
+		
+		self.batch_size = BATCH_SIZE
+		self.gamma = 0.99
+		self.tau = 0.005
+		
 		self.array = np.zeros((1083))
 		self.action_space = 2
 		self.memory = ReplayBuffer(REPLAY_BUFFER_SIZE, self.array.shape, 2)
-		self.noise = 0.1
+		self.noise = 0.8
 		
 		self.actor = ActorNetwork(self.state_dim, self.action_dim, self.action_space, name='actor')
 		self.critic = CriticNetwork(self.state_dim, self.action_dim, name='critic')
@@ -58,31 +64,39 @@ class DDPG:
 		
 	def remember(self, state, action, reward, new_state, done):
 		self.memory.store_transition(state, action, reward, new_state, done)
-		
+
 	def choose_action(self, observation, evaluate=False):
 		state = tf.convert_to_tensor([observation], dtype=tf.float32)
 		actions = self.actor(state)
 		if not evaluate:
 			actions += tf.random.normal(shape=[self.action_space], mean = 0.0, stddev = self.noise)
-			
-		return actions[0]
+		print("actions: ", actions)
+		
+		actions = tf.clip_by_value(actions, -1.0, 1.0)
+		
+		return actions
 		
 	def learn(self):
+		
+		# 1. first we check if we have enough samples to learn
 		if self.memory.mem_cntr < self.batch_size:
 			return
 			
-		state, action, reward, new_state, done = self.memory.sample_buffer(self.batch_size)
+		# 2. Then sample experience and convert them into tensors
+		state, action, reward, new_state, dones = self.memory.sample_buffer(self.batch_size)
 		
 		states = tf.convert_to_tensor(state, dtype=tf.float32)
 		states_ = tf.convert_to_tensor(new_state, dtype=tf.float32)
 		rewards = tf.convert_to_tensor(reward, dtype=tf.float32)
 		actions = tf.convert_to_tensor(action, dtype=tf.float32)
+		dones = tf.convert_to_tensor(dones, dtype=tf.bool)
 		
+		# 3. Bellman equation & calculating critic loss
 		with tf.GradientTape() as tape:
 			target_actions = self.target_actor(states_)
 			critic_value_ = tf.squeeze(self.target_critic(states_, target_actions), 1)
 			critic_value = tf.squeeze(self.critic(states, actions), 1)
-			target = reward + self.gamma*critic_value_*(1-done)
+			target = reward + self.gamma*critic_value_
 			critic_loss = keras.losses.MSE(target, critic_value)
 			
 		critic_network_gradient = tape.gradient(critic_loss, self.critic.trainable_variables)

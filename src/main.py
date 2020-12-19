@@ -3,55 +3,57 @@
 import gym
 import gym_foo
 import numpy as np
+import csv
 import filter_env
 import tensorflow as tf
 import rospy
-import time
 import gc
+
 gc.enable()
 
+from pathlib import Path
+from datetime import datetime
+
+from rl_nav_test_rst import rl_nav
 from rl_nav_ddpg_main import DDPG
 
-EPISODES = 1
-MAX_EP_STEPS = 6000
-state_dim = 12
-action_dim = 1
+EPISODES = 10000
+MAX_EP_STEPS = 500
+state_dim = 1083
+action_dim = 2
 
 def main():	
-	environment = gym.make('rl-navigation-v0')
+#	environment = gym.make('rl-navigation-v0')
+	rospy.init_node('ddpg_stages', anonymous=True)
+	environment = rl_nav()
 	agent = DDPG(state_dim, action_dim, environment)
-	print('TESTING...', environment)
+	now = datetime.now()
 	
 	for episode in range(EPISODES):
+			
 		state, done = environment.reset()
 		total_reward = 0
-		print("episode number: ", episode)
+			
+		print("--------------------episode number: ", episode)
 
 		for step in range(MAX_EP_STEPS):
+				
 			action = agent.choose_action(state)[0]
-			state_, reward, done = environment.step(action)
-			break
+			print(f"action: {action}")
+			state_, reward, done = environment.step(action[1])
+				
 			total_reward += reward
+			
 			agent.remember(state, action, reward, state_, done)
+			state = state_
+				
+			agent.learn()
 			
 			if done or step == MAX_EP_STEPS - 1:
-				print("total reward: ", total_reward)
-				break
-
-		
-#		for step in range(MAX_EP_STEPS):
-#			age = agent.noise_action(state)[0]
-#			print ("age: ", age)
-#			state_, reward, done = environment.step(age)
-#			print("number: ", step)
-#			time_step = agent.perceive(state, age, reward, state_, done)
-#			state = state_
-#			total_reward += reward
-			
-#			if done or step == MAX_EP_STEPS - 1:
-#				print("total reward: ", round(total_reward, 2))
-#				break
-			
+				print("total reward: ", float(total_reward))
+				with open(f'results/{now}results.csv', 'a', newline='') as file:
+					file.write(f"{episode}, {total_reward}\n")
+				break				
 
 if __name__ == "__main__":
 	main()
