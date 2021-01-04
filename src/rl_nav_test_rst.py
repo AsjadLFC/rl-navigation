@@ -41,7 +41,7 @@ class rl_nav():
 		self._seed()
 		
 	def calculate_observation(self):
-		min_range = 0.7
+		min_range = 0.73
 		scan_num = []
 		done = False
 		
@@ -72,29 +72,29 @@ class rl_nav():
 #		max_angular_speed = 0.5
 #		ang_velocity = round(float((action - 10) * max_angular_speed * 0.1), 4)
 
-		ang_velocity = round(float(action), 4)
+		ang_velocity = round(float(action[1]), 4)
 		velocity_command = Twist()
-		velocity_command.linear.x = 1.3
+		velocity_command.linear.x = action[0]
 		velocity_command.angular.z = ang_velocity
 
 		self.unpauseSim()
 		
 		self.velocity_publish.publish(velocity_command)
-		rospy.sleep(0.3)
+		rospy.sleep(0.1)
 		
 #		self.reset_cmd_vel()
 		state, done = self.calculate_observation()
 		
 		self.pauseSim()
 
-		angular_reward = (1 - abs(ang_velocity)) * 10
+		angular_reward = abs(ang_velocity) * 10
 		
 		if done:
-			reward = -200
+			reward = -500
 		else:
-			reward = 70
+			reward = round(float(action[0]), 2) * 70
 		
-		cumulative_reward = reward + angular_reward
+		cumulative_reward = reward - angular_reward
 		
 		return state, cumulative_reward, done
 		
@@ -111,8 +111,8 @@ class rl_nav():
 		self.unpauseSim()
 		
 		#reset to initial
-		self.check_connection()
-		self.reset_cmd_vel()
+#		self.check_connection()
+#		self.reset_cmd_vel()
 		
 		# take observation 
 		data = self.calculate_observation()

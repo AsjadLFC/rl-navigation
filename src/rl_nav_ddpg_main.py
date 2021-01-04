@@ -14,35 +14,36 @@ from rl_nav_networks import CriticNetwork, ActorNetwork
 
 REPLAY_BUFFER_SIZE = 100000
 REPLAY_START_SIZE = 10000
-BATCH_SIZE = 128
+BATCH_SIZE = 200
 GAMMA = 0.99
 
 class DDPG:
 	"""docstring for DDPG"""
-	def __init__(self, state_dim, action_dim, env):
+	def __init__(self, state_dim, action_dim, env, actor_lr=0.0001, critic_lr=0.0002):
 		self.name = 'DDPG'
 		self.state_dim = state_dim
 		self.action_dim = action_dim
 		self.environment = env
 		
 		self.batch_size = BATCH_SIZE
+		self.replay_start_size = REPLAY_START_SIZE
 		self.gamma = 0.99
-		self.tau = 0.005
+		self.tau = 0.001
 		
 		self.array = np.zeros((1083))
 		self.action_space = 2
 		self.memory = ReplayBuffer(REPLAY_BUFFER_SIZE, self.array.shape, 2)
-		self.noise = 0.8
+		self.noise = 1.0
 		
 		self.actor = ActorNetwork(self.state_dim, self.action_dim, self.action_space, name='actor')
 		self.critic = CriticNetwork(self.state_dim, self.action_dim, name='critic')
 		self.target_actor = ActorNetwork(self.state_dim, self.action_dim, self.action_space, name='target_actor')
 		self.target_critic = CriticNetwork(self.state_dim, self.action_dim, name='target_critic')
 		
-		self.actor.compile(optimizer=Adam(learning_rate=0.001))
-		self.critic.compile(optimizer=Adam(learning_rate=0.002))
-		self.target_actor.compile(optimizer=Adam(learning_rate=0.001))
-		self.target_critic.compile(optimizer=Adam(learning_rate=0.002))
+		self.actor.compile(optimizer=Adam(learning_rate=actor_lr))
+		self.critic.compile(optimizer=Adam(learning_rate=critic_lr))
+		self.target_actor.compile(optimizer=Adam(learning_rate=actor_lr))
+		self.target_critic.compile(optimizer=Adam(learning_rate=critic_lr))
 		
 		self.update_network_parameters(tau=1)
 		
@@ -68,18 +69,19 @@ class DDPG:
 	def choose_action(self, observation, evaluate=False):
 		state = tf.convert_to_tensor([observation], dtype=tf.float32)
 		actions = self.actor(state)
+#		print(f"actions before : {actions}")
 		if not evaluate:
 			actions += tf.random.normal(shape=[self.action_space], mean = 0.0, stddev = self.noise)
-		print("actions: ", actions)
+#		print("actions after: ", actions)
 		
-		actions = tf.clip_by_value(actions, -1.0, 1.0)
+		actions = tf.clip_by_value(actions, -0.5, 0.5)
 		
 		return actions
 		
 	def learn(self):
 		
 		# 1. first we check if we have enough samples to learn
-		if self.memory.mem_cntr < self.batch_size:
+		if self.memory.mem_cntr < self.replay_start_size:
 			return
 			
 		# 2. Then sample experience and convert them into tensors
@@ -112,4 +114,17 @@ class DDPG:
 		
 		self.update_network_parameters()
 			
+#	def save_models(self):
+#		print('... save model ...')
+#		self.actor.save_weights(self.actor.checkpoint_file)
+#		self.target_actor.save_weights(self.target_actor.checkpoint_file)
+#		self.critic.save_weights(self.critic.checkpoint_file)
+#		self.target_critic.save_weights(self.target_critic.checkpoint_file)
 		
+		
+#	def load_models(self):
+#		print('... load model ...')
+#		self.actor.load_weights(self.actor.checkpoint_file)
+#		self.target_actor.load_weights(self.target_actor.checkpoint_file)
+#		self.critic.load_weights(self.critic.checkpoint_file)
+#		self.target_critic.load_weights(self.target_critic.checkpoint_file)
