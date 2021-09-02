@@ -1,4 +1,4 @@
-# rl-navigation
+# Autonomous Mobile Robot Navigation in a Cluttered Environment
 
 Demo
 - https://www.youtube.com/watch?v=Q1SnGFpOq4U&ab_channel=AsjadSohail
