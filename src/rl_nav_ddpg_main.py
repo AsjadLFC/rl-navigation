@@ -13,13 +13,13 @@ from rl_nav_buffer import ReplayBuffer
 from rl_nav_networks import CriticNetwork, ActorNetwork
 
 REPLAY_BUFFER_SIZE = 100000
-REPLAY_START_SIZE = 10000
-BATCH_SIZE = 200
+REPLAY_START_SIZE = 8000 #40000
+BATCH_SIZE = 220 # 250, 220, 150
 GAMMA = 0.99
 
 class DDPG:
 	"""docstring for DDPG"""
-	def __init__(self, state_dim, action_dim, env, actor_lr=0.0001, critic_lr=0.0002):
+	def __init__(self, state_dim, action_dim, env, actor_lr=0.0001, critic_lr=0.0002): # 0.00001, 0.00002; 0.00005, 0.0001; 0.00003, 0.00007
 		self.name = 'DDPG'
 		self.state_dim = state_dim
 		self.action_dim = action_dim
@@ -30,7 +30,7 @@ class DDPG:
 		self.gamma = 0.99
 		self.tau = 0.001
 		
-		self.array = np.zeros((1083))
+		self.array = np.zeros((1081))
 		self.action_space = 2
 		self.memory = ReplayBuffer(REPLAY_BUFFER_SIZE, self.array.shape, 2)
 		self.noise = 1.0
@@ -69,14 +69,24 @@ class DDPG:
 	def choose_action(self, observation, evaluate=False):
 		state = tf.convert_to_tensor([observation], dtype=tf.float32)
 		actions = self.actor(state)
-#		print(f"actions before : {actions}")
 		if not evaluate:
 			actions += tf.random.normal(shape=[self.action_space], mean = 0.0, stddev = self.noise)
-#		print("actions after: ", actions)
 		
-		actions = tf.clip_by_value(actions, -0.5, 0.5)
+		# ~ action1 = tf.random.normal(shape=[1], mean=0.0, stddev = 0.15)
+		# ~ print("action1:...", action1)
+		# ~ print("action00:", actions[0][0]/2)
 		
-		return actions
+		# ~ action2 = tf.random.normal(shape=[1], mean = 0.0, stddev = 0.30)
+		# ~ print("action2:...", action2)
+		# ~ print("action01:", actions[0][1])
+		
+		# ~ tempv = tf.clip_by_value((actions[0][0]/2)+ action1, 0, 0.5)
+		# ~ tempa = tf.clip_by_value(actions[0][1]+ action2, -0.7, 0.7)
+		
+		tempv = tf.clip_by_value((actions[0][0]/2), 0, 0.5)
+		tempa = tf.clip_by_value(actions[0][1], -0.5, 0.5)
+		
+		return [tempv, tempa]
 		
 	def learn(self):
 		
@@ -114,17 +124,17 @@ class DDPG:
 		
 		self.update_network_parameters()
 			
-#	def save_models(self):
-#		print('... save model ...')
-#		self.actor.save_weights(self.actor.checkpoint_file)
-#		self.target_actor.save_weights(self.target_actor.checkpoint_file)
-#		self.critic.save_weights(self.critic.checkpoint_file)
-#		self.target_critic.save_weights(self.target_critic.checkpoint_file)
+	def save_models(self):
+		print('... save model ...')
+		self.actor.save_weights(self.actor.checkpoint_file)
+		self.target_actor.save_weights(self.target_actor.checkpoint_file)
+		self.critic.save_weights(self.critic.checkpoint_file)
+		self.target_critic.save_weights(self.target_critic.checkpoint_file)
 		
 		
-#	def load_models(self):
-#		print('... load model ...')
-#		self.actor.load_weights(self.actor.checkpoint_file)
-#		self.target_actor.load_weights(self.target_actor.checkpoint_file)
-#		self.critic.load_weights(self.critic.checkpoint_file)
-#		self.target_critic.load_weights(self.target_critic.checkpoint_file)
+	def load_models(self):
+		print('... load model ...')
+		self.actor.load_weights(self.actor.checkpoint_file).expect_partial()
+		self.target_actor.load_weights(self.target_actor.checkpoint_file).expect_partial()
+		self.critic.load_weights(self.critic.checkpoint_file).expect_partial()
+		self.target_critic.load_weights(self.target_critic.checkpoint_file).expect_partial()

@@ -20,57 +20,75 @@ from gazebo_msgs.srv import SpawnModel, DeleteModel, GetModelState, GetModelStat
 
 class rl_nav():
 	def __init__(self):
-		self.velocity_publish = rospy.Publisher('/GETjag/cmd_vel', Twist, queue_size=20)
+		# ~ self.velocity_publish = rospy.Publisher('/GETjag/cmd_vel', Twist, queue_size=20)
+		self.velocity_publish = rospy.Publisher('/cmd_vel', Twist, queue_size=20)
+		# ~ self.scan_data = rospy.Subscriber('/base_scan', LaserScan, self.scan_message, queue_size=1)
 		
 		self.unpause = rospy.ServiceProxy('/gazebo/unpause_physics', Empty)
 		self.pause = rospy.ServiceProxy('/gazebo/pause_physics', Empty)
 		self.reset_proxy = rospy.ServiceProxy('/gazebo/reset_world', Empty)
 		self.del_model = rospy.ServiceProxy('/gazebo/delete_model', DeleteModel)
+		# ~ self.rate = rospy.Rate(40)
 		
 		self.position = Pose()
 		
 		self.action_space = spaces.Discrete(3)
 		
 		self.model_coord = rospy.ServiceProxy('gazebo/get_model_state', GetModelState)
-#		self.reset_proxy = rospy.ServiceProxy('gazebo/reset_world', Empty)
-		
-#		self.screen_height = 640
-#		self.screen_width = 1080
-#		self.observation_space = spaces.Box(low=0, high=255, shape=(self.screen_height, self.screen_width, 3))
-		
+				
 		self._seed()
 		
+	def scan_message(self, msg):
+		self.data = msg
+		
 	def calculate_observation(self):
-		min_range = 0.73
+		min_range = 0.45 # 0.72, 0.45
 		scan_num = []
 		done = False
 		
 		data = None
 		while data is None:
 			try:
-				data = rospy.wait_for_message('/GETjag/laser_scan_front', LaserScan, timeout=5)
+				# ~ data = rospy.wait_for_message('/GETjag/laser_scan_front', LaserScan, timeout=5)
+				self.check_connection()
+				data = rospy.wait_for_message('/base_scan', LaserScan, timeout=10)
 			except:
+				# ~ print("not getting the scan data.. ")
 				pass
 		
-		for i in range(len(data.ranges)):
+		# ~ data = self.data
+		
+		for i in range(0, len(data.ranges)):
 			if data.ranges[i] == float('Inf'):
 				scan_num.append(3.5)
 			elif np.isnan(data.ranges[i]):
 				scan_num.append(0)
 			else:
 				scan_num.append(data.ranges[i])
+		
+		## [135 - 270] , [810 - 945]
+		# ~ if sum(scan_num[155:250]) > sum(scan_num[830:925]):
+			# ~ right_neg = True
 				
 		obstacle_min_range = round(min(scan_num), 2)
 		obstacle_angle = np.argmin(scan_num)
 		
+		d_right = sum(scan_num[0:360])/360
+		d_left = sum(scan_num[720:1080])/360
+		d_right_front = sum(scan_num[360:540])/180
+		d_left_front = sum(scan_num[540:720])/180
+	#	d_front = sum(scan_num[520:560])/40
+		
 		if min_range > min(scan_num) > 0:
 			done = True
 				
-		return scan_num + [obstacle_min_range, obstacle_angle], done
+		# ~ return scan_num + [obstacle_min_range, d_right, d_left], done, right_neg
+	#	return scan_num + [obstacle_min_range, d_right, d_right , d_right , d_right,
+	#						d_right, d_left, d_left, d_left, d_left, d_left,
+	#						d_right_front, d_right_front, d_left_front, d_left_front, obstacle_angle], done
+        return scan_num, done
 			
 	def step(self, action):
-#		max_angular_speed = 0.5
-#		ang_velocity = round(float((action - 10) * max_angular_speed * 0.1), 4)
 
 		ang_velocity = round(float(action[1]), 4)
 		velocity_command = Twist()
@@ -87,7 +105,9 @@ class rl_nav():
 		
 		self.pauseSim()
 
-		angular_reward = abs(ang_velocity) * 10
+        angular_reward = 0
+        if abs(ang_velocity) > 0:
+            angular_reward = 35
 		
 		if done:
 			reward = -500
@@ -112,17 +132,18 @@ class rl_nav():
 		
 		#reset to initial
 #		self.check_connection()
-#		self.reset_cmd_vel()
+		self.reset_cmd_vel()
 		
 		# take observation 
-		data = self.calculate_observation()
+		data, done = self.calculate_observation()
 		
 		# pause simulation
 		self.pauseSim()
 			
-		return data
+		return data, done
 	
 	def pauseSim(self):
+		# ~ return
 		rospy.wait_for_service('/gazebo/pause_physics')
 		try:
 			self.pause()
@@ -130,6 +151,7 @@ class rl_nav():
 			rospy.loginfo("pause physics failed")
 		
 	def unpauseSim(self):
+		# ~ return
 		rospy.wait_for_service('/gazebo/unpause_physics')
 		try:
 			self.unpause()
@@ -150,8 +172,12 @@ class rl_nav():
 		self.velocity_publish.publish(cmd_vel)
 		
 	def resetSim(self):
+		# ~ return
+		self.reset_cmd_vel()
+		
 		rospy.wait_for_service('/gazebo/delete_model')
 		rospy.wait_for_service('/gazebo/reset_world')
+		
 		try:
 			self.reset_proxy()
 		except (rospy.ServiceException) as e:
